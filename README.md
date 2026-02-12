@@ -1,100 +1,181 @@
-# Remote MCP Server on Cloudflare with Stainless
+# Graphor Remote MCP Server
 
-Remote MCP servers require OAuth, so this flow implements a local version of the OAuth redirects, but instead accepts the
-API token and any other client configuration options that you'd need to instantiate your TypeScript client.
+The Graphor Remote MCP Server lets you connect AI assistants and agentic frameworks to the [Graphor](https://graphorlm.com) API using the [Model Context Protocol (MCP)](https://modelcontextprotocol.io). It runs on Cloudflare Workers and uses **OAuth** for authentication.
 
-## Usage
+**Server URL:**
 
-The recommended way to use this project is to use the below "deploy to cloudflare" button to use this repo as a template for generating a server.
-
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/synapseops/graphor-typescript-sdk/tree/main/packages/mcp-server/cloudflare-worker)
-
-## Develop locally
-
-```bash
-# install dependencies
-npm install
-
-# run locally
-npm run dev
+```
+https://mcp.graphor.workers.dev/sse
 ```
 
-You should be able to open [`http://localhost:8787/`](http://localhost:8787/) in your browser
+> Looking for the local MCP server instead? See the [graphor-mcp](https://www.npmjs.com/package/graphor-mcp) package.
 
-## Connect the MCP inspector to your server
+## Quick Start
 
-To explore your new MCP api, you can use the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector).
+### Claude.ai
 
-- Start it with `npx @modelcontextprotocol/inspector`
-- [Within the inspector](http://localhost:5173), switch the Transport Type to `SSE` and enter `http://localhost:8787/sse` as the URL of the MCP server to connect to, and click "Connect"
-- You will navigate to a (mock) user/password login screen. Input any email and pass to login.
-- You should be redirected back to the MCP Inspector and you can now list and call any defined tools!
+1. Go to **Settings > Connectors > Add custom connector**
+2. Fill in the **Name** (e.g. "Graphor")
+3. Set the **Remote MCP server URL** to:
 
-## Connect Claude Desktop to your local MCP server
+```
+https://mcp.graphor.workers.dev/sse
+```
 
-The MCP inspector is great, but we really want to connect this to Claude! Follow [Anthropic's Quickstart](https://modelcontextprotocol.io/quickstart/user) and within Claude Desktop go to Settings > Developer > Edit Config to find your configuration file.
+4. You will be redirected to log in through the OAuth flow
+5. Once authenticated, Graphor tools will be available in your conversations
 
-Open the file in your text editor and replace it with this configuration:
+### Claude Desktop
+
+Add the following to your Claude Desktop configuration file (Settings > Developer > Edit Config):
 
 ```json
 {
   "mcpServers": {
     "graphor_api": {
       "command": "npx",
-      "args": ["mcp-remote", "http://localhost:8787/sse"]
+      "args": ["mcp-remote", "https://mcp.graphor.workers.dev/sse"]
     }
   }
 }
 ```
 
-This will run a local proxy and let Claude talk to your MCP server over HTTP
+When you open Claude Desktop, a browser window will open for you to log in. After authenticating, the Graphor tools will appear in the bottom right of your conversation.
 
-When you open Claude a browser window should open and allow you to login. You should see the tools available in the bottom right. Given the right prompt Claude should ask to call the tool.
+### Cursor
 
-## Deploy to Cloudflare
-
-If you want to manually deploy this server (e.g. without the "deploy to cloudflare" button)
-
-1. `npx wrangler@latest kv namespace create remote-mcp-server-oauth-kv`
-2. Follow the guidance to add the kv namespace ID to `wrangler.jsonc`
-3. `npm run deploy`
-
-## Call your newly deployed remote MCP server from a remote MCP client
-
-Just like you did above in "Develop locally", run the MCP inspector:
-
-`npx @modelcontextprotocol/inspector@latest`
-
-Then enter the `workers.dev` URL (ex: `worker-name.account-name.workers.dev/sse`) of your Worker in the inspector as the URL of the MCP server to connect to, and click "Connect".
-
-You've now connected to your MCP server from a remote MCP client.
-
-## Connect Claude Desktop to your remote MCP server
-
-Update the Claude configuration file to point to your `workers.dev` URL (ex: `worker-name.account-name.workers.dev/sse`) and restart Claude
+Add the following to your Cursor MCP configuration (Settings > Tools & MCP > New MCP Server):
 
 ```json
 {
   "mcpServers": {
     "graphor_api": {
       "command": "npx",
-      "args": ["mcp-remote", "https://worker-name.account-name.workers.dev/sse"]
+      "args": ["mcp-remote", "https://mcp.graphor.workers.dev/sse"]
     }
   }
 }
 ```
 
-## Debugging
+### Agentic Workflows (LangChain, CrewAI, etc.)
 
-Should anything go wrong it can be helpful to restart Claude, or to try connecting directly to your
-MCP server on the command line with the following command.
+For agentic frameworks that support MCP, connect to the remote server via SSE transport:
 
-```bash
-npx mcp-remote http://localhost:8787/sse
+**LangChain (Python):**
+
+```python
+from langchain_mcp_adapters.client import MultiServerMCPClient
+
+async with MultiServerMCPClient(
+    {
+        "graphor": {
+            "url": "https://mcp.graphor.workers.dev/sse",
+            "transport": "sse",
+        }
+    }
+) as client:
+    tools = client.get_tools()
+    # Use tools with your LangChain agent
 ```
 
-In some rare cases it may help to clear the files added to `~/.mcp-auth`
+**LangChain (TypeScript):**
+
+```typescript
+import { MultiServerMCPClient } from "@langchain/mcp-adapters";
+
+const client = new MultiServerMCPClient({
+  graphor: {
+    url: "https://mcp.graphor.workers.dev/sse",
+    transport: "sse",
+  }
+});
+
+const tools = await client.getTools();
+// Use tools with your LangChain agent
+```
+
+> Note: The OAuth flow will open a browser window on first connection. For headless environments, you may need to complete the OAuth flow beforehand or use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a local proxy.
+
+### Any MCP-compatible Client
+
+For any client that supports remote MCP servers via SSE, use the URL:
+
+```
+https://mcp.graphor.workers.dev/sse
+```
+
+For clients that only support `stdio` transport, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote) as a bridge:
+
+```json
+{
+  "mcpServers": {
+    "graphor_api": {
+      "command": "npx",
+      "args": ["mcp-remote", "https://mcp.graphor.workers.dev/sse"]
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+If you run into issues connecting, try the following:
+
+1. **Restart your client** (Claude Desktop, Cursor, etc.)
+
+2. **Test the connection directly** on the command line:
+
+```bash
+npx mcp-remote https://mcp.graphor.workers.dev/sse
+```
+
+3. **Clear the OAuth cache** if authentication seems stuck:
 
 ```bash
 rm -rf ~/.mcp-auth
 ```
+
+## Self-hosting
+
+You can deploy your own instance of this server to Cloudflare Workers.
+
+### One-click deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/synapseops/graphor-typescript-sdk/tree/main/packages/mcp-server/cloudflare-worker)
+
+### Manual deploy
+
+1. Clone this repository and install dependencies:
+
+```bash
+npm install
+```
+
+2. Create the KV namespace:
+
+```bash
+npx wrangler@latest kv namespace create remote-mcp-server-oauth-kv
+```
+
+3. Add the KV namespace ID to `wrangler.jsonc`
+
+4. Deploy:
+
+```bash
+npm run deploy
+```
+
+### Local development
+
+```bash
+npm install
+npm run dev
+```
+
+The server will be available at [`http://localhost:8787/`](http://localhost:8787/).
+
+To test with the [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector):
+
+1. Run `npx @modelcontextprotocol/inspector`
+2. Switch Transport Type to `SSE` and enter `http://localhost:8787/sse`
+3. Click "Connect" and log in through the OAuth screen
