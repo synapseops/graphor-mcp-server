@@ -174,11 +174,13 @@ You can deploy your own instance of this server to Cloudflare Workers.
 
 ### Manual deploy
 
-1. Clone this repository and install dependencies:
+1. Clone this repository and install the locked dependencies:
 
 ```bash
-npm install
+npm ci
 ```
+
+   To ship a newer `graphor-mcp`, run `npm install graphor-mcp@latest` and commit `package.json` and `package-lock.json`.
 
 2. Create the KV namespace:
 
